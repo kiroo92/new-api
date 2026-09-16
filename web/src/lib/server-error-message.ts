@@ -23,6 +23,7 @@ import i18next from 'i18next'
 export const safeServerErrorMessage = Symbol('safeServerErrorMessage')
 
 const serverErrorMessageKeys = {
+  API_KEY_SINGLE: 'Use your existing API key or regenerate it',
   SUPPORT_TICKET_FAILED: 'Unable to process ticket',
   SUPPORT_TICKET_NOT_FOUND: 'Ticket not found',
   SUPPORT_TICKET_INVALID: 'Invalid ticket input',

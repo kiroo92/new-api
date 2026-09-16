@@ -78,6 +78,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
       id: 'select',
       header: ({ table }) => (
         <Checkbox
+          disabled={!table.getRowModel().rows.some((row) => row.getCanSelect())}
           checked={table.getIsAllPageRowsSelected()}
           indeterminate={table.getIsSomePageRowsSelected()}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
@@ -87,6 +88,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
       ),
       cell: ({ row }) => (
         <Checkbox
+          disabled={!row.getCanSelect()}
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
           aria-label={t('Select row')}

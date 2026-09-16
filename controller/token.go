@@ -9,10 +9,10 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
@@ -276,86 +276,7 @@ func GetTokenUsage(c *gin.Context) {
 }
 
 func AddToken(c *gin.Context) {
-	request := tokenRequest{}
-	err := c.ShouldBindJSON(&request)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	token := request.Token
-	if len(token.Name) > 50 {
-		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
-		return
-	}
-	params := tokenAuditParams(c)
-	params["name"] = token.Name
-	// 非无限额度时，检查额度值是否超出有效范围
-	if !token.UnlimitedQuota {
-		if token.RemainQuota < 0 {
-			common.ApiErrorI18n(c, i18n.MsgTokenQuotaNegative)
-			return
-		}
-		maxQuotaValue := maxTokenQuota()
-		if token.RemainQuota > maxQuotaValue {
-			common.ApiErrorI18n(c, i18n.MsgTokenQuotaExceedMax, map[string]any{"Max": maxQuotaValue})
-			return
-		}
-	}
-	// 检查用户令牌数量是否已达上限
-	maxTokens := operation_setting.GetMaxUserTokens()
-	count, err := model.CountUserTokens(c.GetInt("id"))
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	if int(count) >= maxTokens {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": fmt.Sprintf("已达到最大令牌数量限制 (%d)", maxTokens),
-		})
-		return
-	}
-	if token.Group == "auto" {
-		if !setTokenAutoGroups(c, &token, request.AutoGroups.Groups) {
-			return
-		}
-	} else {
-		token.CrossGroupRetry = false
-		_ = token.SetAutoGroups(nil)
-	}
-	key, err := common.GenerateKey()
-	if err != nil {
-		common.ApiErrorI18n(c, i18n.MsgTokenGenerateFailed)
-		common.SysLog("failed to generate token key: " + err.Error())
-		return
-	}
-	cleanToken := model.Token{
-		UserId:             c.GetInt("id"),
-		Name:               token.Name,
-		Key:                key,
-		CreatedTime:        common.GetTimestamp(),
-		AccessedTime:       common.GetTimestamp(),
-		ExpiredTime:        token.ExpiredTime,
-		RemainQuota:        token.RemainQuota,
-		UnlimitedQuota:     token.UnlimitedQuota,
-		ModelLimitsEnabled: token.ModelLimitsEnabled,
-		ModelLimits:        token.ModelLimits,
-		AllowIps:           token.AllowIps,
-		Group:              token.Group,
-		CrossGroupRetry:    token.CrossGroupRetry,
-		AutoGroups:         token.AutoGroups,
-	}
-	err = cleanToken.Insert()
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	params["id"] = cleanToken.Id
-	common.SetContextKey(c, constant.ContextKeyTokenAuditSucceeded, true)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-	})
+	c.JSON(http.StatusOK, gin.H{"success": false, "code": "API_KEY_SINGLE", "message": model.ErrUserAPIKeyExists.Error()})
 }
 
 func DeleteToken(c *gin.Context) {
@@ -364,6 +285,10 @@ func DeleteToken(c *gin.Context) {
 	token, err := model.GetTokenByIds(id, userId)
 	if err != nil {
 		common.ApiError(c, err)
+		return
+	}
+	if token.IsDefault {
+		c.JSON(http.StatusOK, gin.H{"success": false, "code": "API_KEY_SINGLE", "message": model.ErrUserAPIKeyExists.Error()})
 		return
 	}
 	params := tokenAuditParams(c)
@@ -416,6 +341,14 @@ func UpdateToken(c *gin.Context) {
 	}
 	params["name"] = cleanToken.Name
 	previous := *cleanToken
+	if cleanToken.IsDefault && statusOnly == "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "code": "API_KEY_SINGLE", "message": model.ErrUserAPIKeyExists.Error()})
+		return
+	}
+	if statusOnly != "" && token.Status != common.TokenStatusEnabled && token.Status != common.TokenStatusDisabled {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
 	if token.Status == common.TokenStatusEnabled {
 		if cleanToken.Status == common.TokenStatusExpired && cleanToken.ExpiredTime <= common.GetTimestamp() && cleanToken.ExpiredTime != -1 {
 			common.ApiErrorI18n(c, i18n.MsgTokenExpiredCannotEnable)
@@ -504,6 +437,17 @@ func DeleteTokenBatch(c *gin.Context) {
 		return
 	}
 	userId := c.GetInt("id")
+	if tokens, err := model.GetTokenKeysByIds(tokenBatch.Ids, userId); err != nil {
+		common.ApiError(c, err)
+		return
+	} else {
+		for _, token := range tokens {
+			if token.IsDefault {
+				c.JSON(http.StatusOK, gin.H{"success": false, "code": "API_KEY_SINGLE", "message": model.ErrUserAPIKeyExists.Error()})
+				return
+			}
+		}
+	}
 	count, err := model.BatchDeleteTokens(tokenBatch.Ids, userId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -516,6 +460,20 @@ func DeleteTokenBatch(c *gin.Context) {
 		"message": "",
 		"data":    count,
 	})
+}
+
+func RegenerateUserAPIKey(c *gin.Context) {
+	if middleware.RequireSecurityProof(c, service.VerificationOperation{Scope: service.VerificationScopeAPIKeyRegenerate}) == nil {
+		return
+	}
+	token, err := model.RegenerateUserDefaultToken(c.GetInt("id"), c.GetString("username"))
+	if err != nil {
+		writeSecurityOperationError(c, err)
+		return
+	}
+	tokenAuditParams(c)["id"] = token.Id
+	common.SetContextKey(c, constant.ContextKeyTokenAuditSucceeded, true)
+	common.ApiSuccess(c, buildMaskedTokenResponse(token))
 }
 
 func GetTokenKeysBatch(c *gin.Context) {

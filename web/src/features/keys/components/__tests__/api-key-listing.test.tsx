@@ -53,6 +53,7 @@ import {
 import { apiKeySchema, type ApiKey } from '../../types'
 import { ApiKeyQuotaCell } from '../api-key-quota-cell'
 import { useApiKeysColumns } from '../api-keys-columns'
+import { ApiKeysPrimaryButtons } from '../api-keys-primary-buttons'
 import { ApiKeysProvider } from '../api-keys-provider'
 import { ApiKeysTable } from '../api-keys-table'
 
@@ -297,6 +298,7 @@ it('keeps a long amount within its column while showing the full amount in detai
 function KeysPage() {
   return (
     <ApiKeysProvider>
+      <ApiKeysPrimaryButtons />
       <ApiKeysTable />
       <Toaster />
     </ApiKeysProvider>
@@ -409,6 +411,94 @@ it.each([
     expect(post).not.toHaveBeenCalled()
   }
 )
+
+it('treats the automatic account key as the only key and hides destructive row actions', async () => {
+  await renderKeysPage(1, { is_default: true })
+  expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Disable' })).toBeEnabled()
+
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Open menu' }))
+  expect(
+    screen.queryByRole('menuitem', { name: 'Delete' })
+  ).not.toBeInTheDocument()
+})
+
+it('rotates only after confirmation and verification, then copies the new key', async () => {
+  const user = userEvent.setup()
+  const { post } = await renderKeysPage(1, { is_default: true })
+  let current = 'initial-key'
+  const copy = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+  post.mockImplementation(async (url) => {
+    if (url === '/api/verify') {
+      return {
+        data: {
+          success: true,
+          data: {
+            proof_token: 'test-proof',
+            scope: 'api_key.regenerate',
+            method: 'password',
+            expires_at: 9999999999,
+          },
+        },
+      }
+    }
+    if (url === '/api/token/regenerate') {
+      current = 'rotated-key'
+      return { data: { success: true, data: { ...key, is_default: true } } }
+    }
+    return { data: { success: true, data: { key: current } } }
+  })
+  const originalGet = vi.mocked(api.get).getMockImplementation()
+  vi.mocked(api.get).mockImplementation(async (url, options) => {
+    if (url === '/api/verify/methods') {
+      return {
+        data: {
+          success: true,
+          data: {
+            scope: 'api_key.regenerate',
+            methods: [{ method: 'password', available: true }],
+            oauth_providers: [],
+            password_encryption_enabled: false,
+          },
+        },
+      }
+    }
+    if (!originalGet) throw new Error('Missing API fixture')
+    return originalGet(url, options)
+  })
+  await user.click(screen.getByRole('button', { name: 'Open menu' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Copy Key' }))
+  await waitFor(() => expect(copy).toHaveBeenCalledWith('sk-initial-key'))
+  await user.click(screen.getByRole('button', { name: 'Regenerate API Key' }))
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(post).not.toHaveBeenCalledWith(
+    '/api/token/regenerate',
+    expect.anything(),
+    expect.anything()
+  )
+  await user.click(screen.getByRole('button', { name: 'Regenerate API Key' }))
+  await user.click(screen.getByRole('button', { name: 'Regenerate' }))
+  const password = await screen.findByLabelText('Password', {
+    selector: 'input',
+  })
+  await user.type(password, 'test-password')
+  await user.click(screen.getByRole('button', { name: 'Verify' }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/token/regenerate',
+      {},
+      {
+        headers: { 'X-Security-Proof': 'test-proof' },
+        singleUseAuthorization: true,
+      }
+    )
+  )
+  await screen.findByText('API Key regenerated successfully')
+  await user.click(screen.getByRole('button', { name: 'Open menu' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Copy Key' }))
+  await waitFor(() => expect(copy).toHaveBeenLastCalledWith('sk-rotated-key'))
+})
 
 it('keeps expired status when the server refuses reactivation', async () => {
   const { put, post } = await renderKeysPage(3)

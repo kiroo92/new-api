@@ -55,6 +55,7 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
   const [resolvedKeys, setResolvedKeys] = useState<Record<number, string>>({})
   const [loadingKeys, setLoadingKeys] = useState<Record<number, boolean>>({})
   const pendingRequests = useRef<Record<number, Promise<string | null>>>({})
+  const keyGeneration = useRef(0)
 
   const [copiedKeyId, setCopiedKeyId] = useState<number | null>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -70,6 +71,11 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const triggerRefresh = useCallback(() => {
+    keyGeneration.current += 1
+    pendingRequests.current = {}
+    setResolvedKeys({})
+    setResolvedKey('')
+    setCopiedKeyId(null)
     setRefreshTrigger((prev) => prev + 1)
   }, [])
 
@@ -79,9 +85,11 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
       if (id in pendingRequests.current) return pendingRequests.current[id]
 
       const request = (async () => {
+        const generation = keyGeneration.current
         setLoadingKeys((prev) => ({ ...prev, [id]: true }))
         try {
           const res = await fetchTokenKey(id)
+          if (generation !== keyGeneration.current) return null
           if (res.success && res.data?.key) {
             const fullKey = `sk-${res.data.key}`
             setResolvedKeys((prev) => ({ ...prev, [id]: fullKey }))
@@ -122,7 +130,9 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
+        const generation = keyGeneration.current
         const res = await fetchTokenKeysBatch(uncachedIds)
+        if (generation !== keyGeneration.current) return {}
         if (res.success && res.data?.keys) {
           const newKeys: Record<number, string> = {}
           for (const [idStr, key] of Object.entries(res.data.keys)) {

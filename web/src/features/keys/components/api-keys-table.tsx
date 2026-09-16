@@ -123,7 +123,7 @@ function ApiKeysMobileList({
             <EmptyTitle>{t('No API Keys Found')}</EmptyTitle>
             <EmptyDescription>
               {t(
-                'No API keys available. Create your first API key to get started.'
+                'Your API key is created automatically and works with every model.'
               )}
             </EmptyDescription>
           </EmptyHeader>
@@ -307,7 +307,7 @@ export function ApiKeysTable() {
   const { table } = useDataTable({
     data: apiKeys,
     columns,
-    enableRowSelection: true,
+    enableRowSelection: (row) => !row.original.is_default,
     columnFilters,
     columnVisibilityStorageKey: API_KEYS_COLUMN_VISIBILITY_STORAGE_KEY,
     globalFilter,
@@ -346,7 +346,7 @@ export function ApiKeysTable() {
       isFetching={isFetching}
       emptyTitle={t('No API Keys Found')}
       emptyDescription={t(
-        'No API keys available. Create your first API key to get started.'
+        'Your API key is created automatically and works with every model.'
       )}
       skeletonKeyPrefix='api-keys-skeleton'
       applyHeaderSize

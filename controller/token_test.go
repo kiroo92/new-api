@@ -678,11 +678,7 @@ func verifyAPITokenAudit(t *testing.T) {
 		initialStatus                    int
 		failWrite, rateLimit, usePAT     bool
 	}{
-		{name: "create", method: "POST", path: "/", body: `{"name":"created","expired_time":-1,"unlimited_quota":true}`, action: "token.create", success: true},
-		{name: "invalid create", method: "POST", path: "/", body: `{"name":"attempt","remain_quota":-1}`, action: "token.create", params: `{"name":"attempt"}`},
-		{name: "malformed body", method: "POST", path: "/", body: `{"key":"raw-body-secret"`, action: "token.create", params: `{}`},
-		{name: "validation error exceeds audit buffer", method: "POST", path: "/", body: `{"remain_quota":` + strings.Repeat("9", 64*1024) + `}`, action: "token.create", params: `{}`},
-		{name: "create storage failure", method: "POST", path: "/", body: `{"name":"attempt","unlimited_quota":true}`, action: "token.create", params: `{"name":"attempt"}`, failWrite: true},
+		{name: "manual create denied", method: "POST", path: "/", body: `{"name":"created","unlimited_quota":true}`, action: "token.create", params: `{}`},
 		{name: "normalized update", method: "PUT", path: "/", body: `{"id":$id,"name":"renamed","expired_time":-1,"remain_quota":200,"unlimited_quota":true,"group":"default","cross_group_retry":true,"allow_ips":""}`, action: "token.update", success: true, params: `{"id":$id,"name":"renamed","changed_fields":["name","remain_quota","group","cross_group_retry","auto_groups"]}`},
 		{name: "configuration values stay private", method: "PUT", path: "/", body: `{"id":$id,"name":"owned","expired_time":42,"remain_quota":100,"unlimited_quota":false,"model_limits_enabled":true,"model_limits":"private-model-configuration","allow_ips":"203.0.113.57","group":"auto","cross_group_retry":true}`, action: "token.update", success: true, params: `{"id":$id,"name":"owned","changed_fields":["expired_time","unlimited_quota","model_limits_enabled","model_limits","allow_ips"]}`},
 		{name: "unchanged update", method: "PUT", path: "/", body: `{"id":$id,"name":"owned","expired_time":-1,"remain_quota":100,"unlimited_quota":true,"group":"auto","cross_group_retry":true,"allow_ips":""}`, action: "token.update", success: true, params: `{"id":$id,"name":"owned","changed_fields":[]}`},
@@ -796,12 +792,7 @@ func verifyAPITokenAudit(t *testing.T) {
 			assert.Equal(t, tc.action, operation.Other.Op.Action)
 			params, err := common.Marshal(operation.Other.Op.Params)
 			require.NoError(t, err)
-			if tc.name == "create" {
-				var created model.Token
-				require.NoError(t, model.DB.Where("user_id = ? AND name = ?", user.Id, "created").First(&created).Error)
-				assert.JSONEq(t, fmt.Sprintf(`{"id":%d,"name":"created"}`, created.Id), string(params))
-				assert.NotContains(t, string(params), created.Key)
-			} else if tc.params == `{}` {
+			if tc.params == `{}` {
 				assert.Empty(t, operation.Other.Op.Params)
 			} else {
 				assert.JSONEq(t, replace.Replace(tc.params), string(params))
@@ -881,7 +872,8 @@ func verifyAPITokenAudit(t *testing.T) {
 			}
 		}))
 		t.Cleanup(func() { require.NoError(t, model.LOG_DB.Callback().Create().Remove("token-audit:log-fail")) })
-		request := httptest.NewRequest("POST", "/api/token/", strings.NewReader(`{"name":"audit-down","unlimited_quota":true}`))
+		auditToken := seedToken(t, model.DB, user.Id, "audit-down", "audit-down-key")
+		request := httptest.NewRequest("POST", fmt.Sprintf("/api/token/%d/key", auditToken.Id), nil)
 		request.Header.Set("Authorization", "Bearer "+jwt)
 		request.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()
@@ -891,4 +883,63 @@ func verifyAPITokenAudit(t *testing.T) {
 		require.NoError(t, model.DB.Model(&model.Token{}).Where("name = ?", "audit-down").Count(&count).Error)
 		assert.EqualValues(t, 1, count)
 	})
+}
+
+func TestAccountAPIKeyRotationSecurity(t *testing.T) {
+	user, identity := setupSecurityEnrollmentTest(t)
+	require.NoError(t, model.DB.AutoMigrate(&model.Token{}))
+	token, err := model.CreateUserDefaultToken(user.Id, user.Username)
+	require.NoError(t, err)
+	original := token.Key
+	jwt, _, err := service.IssueAccessToken(identity)
+	require.NoError(t, err)
+	router := gin.New()
+	router.Use(middleware.RequestId())
+	routes := router.Group("/api/token", middleware.UserAuth(), middleware.TokenOperationAudit())
+	routes.POST("/regenerate", RegenerateUserAPIKey)
+	routes.POST("/", AddToken)
+	routes.DELETE("/:id", DeleteToken)
+	routes.POST("/batch", DeleteTokenBatch)
+	routes.PUT("/", UpdateToken)
+	request := func(method, path, body, proof string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+jwt)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Security-Proof", proof)
+		res := httptest.NewRecorder()
+		router.ServeHTTP(res, req)
+		return res
+	}
+	for _, mutation := range []struct{ method, path, body string }{
+		{"POST", "/api/token/", `{"name":"extra","unlimited_quota":true}`},
+		{"DELETE", fmt.Sprintf("/api/token/%d", token.Id), ""},
+		{"POST", "/api/token/batch", fmt.Sprintf(`{"ids":[%d]}`, token.Id)},
+		{"PUT", "/api/token/", fmt.Sprintf(`{"id":%d,"model_limits_enabled":true,"model_limits":"private","group":"vip"}`, token.Id)},
+	} {
+		assert.False(t, decodeAPIResponse(t, request(mutation.method, mutation.path, mutation.body, "")).Success)
+	}
+	assert.Equal(t, http.StatusForbidden, request("POST", "/api/token/regenerate", "", "").Code)
+	wrong := issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{Scope: service.VerificationScopeAccessTokenGenerate}, "password")
+	assert.Equal(t, http.StatusForbidden, request("POST", "/api/token/regenerate", "", wrong).Code)
+	expired := issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{Scope: service.VerificationScopeAPIKeyRegenerate}, "password")
+	require.NoError(t, model.DB.Model(&model.AuthFlow{}).Where("purpose = ?", model.AuthFlowPurposeSecurityProof).Update("expires_at", time.Now().Add(-time.Minute)).Error)
+	assert.Equal(t, http.StatusForbidden, request("POST", "/api/token/regenerate", "", expired).Code)
+	proof := issueSecurityEnrollmentProof(t, identity, service.VerificationOperation{Scope: service.VerificationScopeAPIKeyRegenerate}, "password")
+	response := request("POST", "/api/token/regenerate", "", proof)
+	require.True(t, decodeAPIResponse(t, response).Success)
+	require.NoError(t, model.DB.First(token, token.Id).Error)
+	assert.NotEqual(t, original, token.Key)
+	assert.NotContains(t, response.Body.String(), token.Key)
+	assert.Equal(t, http.StatusForbidden, request("POST", "/api/token/regenerate", "", proof).Code)
+	_, err = model.ValidateUserToken(original)
+	assert.Error(t, err)
+	var event model.AuditLog
+	require.NoError(t, model.LOG_DB.Where("request_id = ?", response.Header().Get(common.RequestIdKey)).First(&event).Error)
+	assert.Equal(t, "token.regenerate", event.Action)
+	assert.True(t, event.Success)
+	encoded, err := common.Marshal(event)
+	require.NoError(t, err)
+	for _, secret := range []string{original, token.Key, jwt, proof} {
+		assert.NotContains(t, string(encoded), secret)
+	}
 }

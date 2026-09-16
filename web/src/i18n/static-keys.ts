@@ -812,6 +812,12 @@ export const STATIC_I18N_KEYS = [
   'Account binding',
   'Account unlinking',
   'Email confirmation code resend',
+  'API Key regenerated successfully',
+  'Regenerate API Key',
+  'Regenerate API Key?',
+  'Use your existing API key or regenerate it',
+  'The current API key will stop working immediately.',
+  'Your API key is created automatically and works with every model.',
   // Model and vendor management labels.
   'Unable to process ticket',
   'Ticket not found',

@@ -77,6 +77,20 @@ export async function createApiKey(
   return res.data
 }
 
+export async function regenerateApiKey(
+  proofToken: string
+): Promise<ApiResponse<ApiKey>> {
+  const res = await api.post(
+    '/api/token/regenerate',
+    {},
+    {
+      headers: { 'X-Security-Proof': proofToken },
+      singleUseAuthorization: true,
+    }
+  )
+  return res.data
+}
+
 // Update an existing API key
 export async function updateApiKey(
   data: ApiKeyFormData & { id: number }

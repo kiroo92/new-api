@@ -37,6 +37,7 @@ const TOKEN_AUDIT_OPERATIONS: Record<
   string,
   { labelKey: string; namedKey?: string }
 > = {
+  'token.regenerate': { labelKey: 'Regenerate API Key' },
   'token.create': {
     labelKey: 'Create API token',
     namedKey: 'Create API token “{{name}}”',

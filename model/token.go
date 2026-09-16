@@ -29,6 +29,7 @@ type Token struct {
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	AutoGroups         string         `json:"-" gorm:"type:text"`
+	IsDefault          bool           `json:"is_default" gorm:"index"`
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
 
@@ -282,6 +283,14 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 		// Try Redis first
 		token, err := cacheGetTokenByKey(key)
 		if err == nil {
+			// Redis cannot authorize a credential that was rotated or revoked.
+			var current Token
+			if err := DB.Where(map[string]any{"id": token.Id, "key": key}).First(&current).Error; err != nil {
+				return nil, err
+			}
+			if current.IsDefault {
+				return &current, nil
+			}
 			return token, nil
 		}
 		// Don't return error - fall through to DB
@@ -301,9 +310,7 @@ func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 }
 
 func (token *Token) Insert() error {
-	var err error
-	err = DB.Create(token).Error
-	return err
+	return DB.Create(token).Error
 }
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
@@ -472,7 +479,7 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 
 func GetTokenKeysByIds(ids []int, userId int) ([]Token, error) {
 	var tokens []Token
-	err := DB.Select("id", commonKeyCol).
+	err := DB.Select("id", commonKeyCol, "is_default").
 		Where("user_id = ? AND id IN (?)", userId, ids).
 		Find(&tokens).Error
 	return tokens, err

@@ -33,6 +33,7 @@ export type SecurityProofScope =
   | '2fa.backup_codes.regenerate'
   | 'access_token.generate'
   | 'access_token.revoke'
+  | 'api_key.regenerate'
   | 'account.binding.bind'
   | 'account.binding.unbind'
   | 'account.password.set'
