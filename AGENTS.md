@@ -16,6 +16,11 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 - **Extensions**: JavaScript task plugins executed by Sobek; Electron desktop wrapper
 - **Frontend package manager**: Bun (preferred over npm/yarn/pnpm)
 
+## Container publishing
+
+- `.github/workflows/ghcr.yml` (`Publish image to GHCR`) runs manually from GitHub Actions and reuses the root Dockerfile to build the frontend and Go binary on native Linux amd64/arm64 runners. It publishes `ghcr.io/<lowercase-owner>/<repository>:sha-<full-commit>`; only a run on the default branch also updates `latest`. It uses `GITHUB_TOKEN` with `packages: write`, without a separate registry secret. Existing Docker Hub workflows are separate.
+- After the first GHCR publication, package visibility controls anonymous pulls independently of repository visibility. Set the package to public if anonymous deployment pulls are required, or authenticate Docker with a credential permitted to read the package.
+
 ## Architecture
 
 - The Go gateway handles management APIs, upstream relay, billing, and background tasks across `router/`, `middleware/`, `controller/`, `service/`, `model/`, and `relay/`.

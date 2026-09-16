@@ -18,4 +18,4 @@
 - 安全参考：OWASP ASVS 5.0.0（7.5.1 敏感操作重新验证、6.3.4 各认证路径控制一致）；Authentication / Session Management Cheat Sheets。保留 bearer 会话鉴权、单次过期安全证明、随机 Key、轮换撤销、无密钥审计。未宣称全应用 ASVS 合规。
 - 启动顺序回归：主数据库迁移在 Redis 初始化之前运行，迁移必须处理 RedisEnabled=true/RDB=nil；增加专门夹具覆盖，最终六组矩阵复验全部通过。
 - 完成：新后端运行在 :3000，前端 http://127.0.0.1:5173/keys；status/setup 正常、页面 HTTP200、匿名轮换 HTTP401。独立 HTTP 验证覆盖注册即生成一 Key、拒绝额外创建/删除、轮换后旧 Key 401/新 Key 200、安全证明重放403。预览数据库备份在 .local-tests/preview/before-single-key。
-- 测试容器均已停止。浏览器插件不可用，未做浏览器截图验收。未提交。
+- 测试容器均已停止。浏览器插件不可用，未做浏览器截图验收。
