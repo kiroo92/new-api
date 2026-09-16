@@ -16,14 +16,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
-export function Stats() {
-  const { t } = useTranslation()
-
-  return (
-    <p className='text-muted-foreground mt-6 text-sm leading-6'>
-      {t('Serving 10+ enterprises, 30+ API gateways, and 9,000+ users')}
-    </p>
-  )
+export function ticketOptions(t: TFunction) {
+  return {
+    status: [
+      { value: 'open', label: t('Open tickets') },
+      { value: 'resolved', label: t('Resolved tickets') },
+    ],
+    category: [
+      { value: 'general', label: t('General inquiry') },
+      { value: 'billing', label: t('Billing') },
+      { value: 'technical', label: t('Technical support') },
+      { value: 'account', label: t('Account') },
+    ],
+    priority: [
+      { value: 'low', label: t('Low') },
+      { value: 'normal', label: t('Normal') },
+      { value: 'high', label: t('High') },
+      { value: 'urgent', label: t('Urgent') },
+    ],
+  }
 }

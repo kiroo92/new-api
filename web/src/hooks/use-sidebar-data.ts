@@ -27,6 +27,7 @@ import {
   LayoutDashboard,
   ListTodo,
   MessageSquare,
+  MessageCircleQuestion,
   PlugZap,
   Radio,
   ServerCog,
@@ -117,6 +118,11 @@ export function useSidebarData(): SidebarData {
             icon: Wallet,
           },
           {
+            title: t('Support tickets'),
+            url: '/tickets',
+            icon: MessageCircleQuestion,
+          },
+          {
             title: t('Profile'),
             url: '/profile',
             icon: User,
@@ -132,6 +138,12 @@ export function useSidebarData(): SidebarData {
         id: 'admin',
         title: t('Admin'),
         items: [
+          {
+            title: t('Ticket management'),
+            url: '/ticket-management',
+            icon: MessageCircleQuestion,
+            requiredRole: ROLE.ADMIN,
+          },
           {
             title: t('Channels'),
             url: '/channels',

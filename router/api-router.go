@@ -33,6 +33,23 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/about", controller.GetAbout)
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
+		tickets := apiRouter.Group("/tickets", middleware.UserAuth())
+		{
+			tickets.GET("", controller.ListSupportTickets)
+			tickets.POST("", middleware.UserCriticalRateLimit("support-ticket"), controller.CreateSupportTicket)
+			tickets.GET("/:id", controller.GetSupportTicket)
+			tickets.POST("/:id/messages", middleware.UserCriticalRateLimit("support-ticket"), controller.ReplySupportTicket)
+			tickets.PATCH("/:id", controller.SetSupportTicketStatus)
+		}
+		ticketManagement := apiRouter.Group("/ticket-management", middleware.AdminAuth(), func(c *gin.Context) {
+			c.Set("support_ticket_management", true)
+		})
+		{
+			ticketManagement.GET("", controller.ListSupportTickets)
+			ticketManagement.GET("/:id", controller.GetSupportTicket)
+			ticketManagement.POST("/:id/messages", middleware.UserCriticalRateLimit("support-ticket"), controller.ReplySupportTicket)
+			ticketManagement.PATCH("/:id", controller.SetSupportTicketStatus)
+		}
 		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), controller.GetPricing)
 		perfMetricsRoute := apiRouter.Group("/perf-metrics")
 		perfMetricsRoute.Use(middleware.HeaderNavModulePublicOrUserAuth("pricing"))

@@ -22,6 +22,8 @@ This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI pro
 - `relaykit/` is an independent Go module for protocol DTOs and conversions; transport, authentication, database access, and billing stay in the host.
 - JavaScript task plugins live in `plugins/tasks/`, run through `pkg/jsplugin/`, and integrate with host task polling and settlement.
 - `web/` is the React frontend (see `web/AGENTS.md`); `electron/` is the desktop wrapper.
+- Support tickets use `model/support_ticket.go` and `controller/support_ticket.go`, with user `/api/tickets` and admin-only `/api/ticket-management` routes. Ticket and reply tables live in the primary database; every user query is owner-scoped. The UI lives in `web/src/features/tickets/`; sidebar switches use the `tickets` key in personal/admin sections. States are `open`/`resolved`; reopen before replying. The cross-database workflow check is `go test ./controller -run '^TestSupportTicketWorkflow$' -count=1` with optional `TICKET_TEST_DSN` or `TICKET_TEST_SQLITE` pointing to a dedicated test database.
+- Referral invitations are available in the wallet's `AffiliateRewardsCard` (`web/src/features/wallet/`), using `/sign-up?aff=<code>` links. `QuotaForInviter` and `QuotaForInvitee` configure registration rewards in billing settings; rewards and transfers require the existing payment compliance confirmation. The current navigation exposes this through the wallet, not a separate invitations page.
 
 ## Internationalization (i18n)
 

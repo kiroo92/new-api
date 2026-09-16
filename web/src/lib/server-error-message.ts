@@ -23,6 +23,10 @@ import i18next from 'i18next'
 export const safeServerErrorMessage = Symbol('safeServerErrorMessage')
 
 const serverErrorMessageKeys = {
+  SUPPORT_TICKET_FAILED: 'Unable to process ticket',
+  SUPPORT_TICKET_NOT_FOUND: 'Ticket not found',
+  SUPPORT_TICKET_INVALID: 'Invalid ticket input',
+  SUPPORT_TICKET_RESOLVED: 'Reopen this ticket before replying',
   TELEGRAM_OAUTH_NOT_CONFIGURED:
     'Telegram OAuth is not configured or enabled. Please contact your administrator.',
   TELEGRAM_OAUTH_CONFLICT:

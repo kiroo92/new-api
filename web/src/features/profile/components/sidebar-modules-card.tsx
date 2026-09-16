@@ -117,6 +117,11 @@ export function SidebarModulesCard() {
       description: t('User personal functions'),
       modules: [
         {
+          key: 'tickets',
+          title: t('Support tickets'),
+          description: t('Create a ticket when you need help.'),
+        },
+        {
           key: 'topup',
           title: t('Wallet Management'),
           description: t('Balance and top-up management'),

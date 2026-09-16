@@ -146,6 +146,7 @@
 ### 3.10 样式
 
 - 以 Tailwind 工具类为主，动态类名用 `cn()` 合并；非动态场景避免内联样式。
+- 默认全站配色位于 `src/styles/theme.css`：暖白/炭黑为主色，`--brand` 用于橙色强调，`--primary` 用于高对比度主操作；首页沿用全局主题。修改默认配色时同步 `src/lib/theme-customization.ts` 的默认预览色及 `index.html` 的浏览器主题色；用户选择的主题预设仍由 `theme-presets.css` 覆盖。
 - 响应式采用移动优先与 Tailwind 断点（`sm:`、`md:`、`lg:` 等）；主题与暗色用 CSS 变量与 `dark:`，自定义样式集中在 `src/styles/`，组件内尽量少写自定义 CSS。
 
 ### 3.11 文件组织

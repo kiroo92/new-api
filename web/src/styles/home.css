@@ -1,0 +1,130 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+.home-primary-action {
+  --primary: #ed5b20;
+  --primary-foreground: #141413;
+}
+.home-hero {
+  background-image: radial-gradient(
+    ellipse at 80% 70%,
+    color-mix(in srgb, var(--brand) 6%, transparent),
+    transparent 55%
+  );
+}
+.home-routing {
+  position: relative;
+  margin: 0;
+}
+.home-routing-lines {
+  display: none;
+}
+.home-routing-label {
+  margin: 20px 0;
+}
+.home-provider {
+  transition:
+    transform 200ms ease,
+    border-color 200ms ease;
+}
+.home-provider:hover {
+  border-color: var(--brand);
+  transform: translateX(-4px);
+}
+.home-contours {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+.home-route-flow {
+  stroke: var(--brand);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 7;
+  animation: home-route-flow 2s linear infinite;
+}
+.home-route-branch {
+  stroke: var(--muted-foreground);
+  opacity: 0.6;
+}
+.home-route-node {
+  fill: var(--brand);
+}
+.home-route-halo {
+  fill: var(--card);
+  stroke: var(--brand);
+  stroke-width: 1;
+  animation: home-route-pulse 3s ease-in-out infinite;
+  transform-origin: 330px 215px;
+}
+@keyframes home-route-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+@keyframes home-route-pulse {
+  50% {
+    transform: scale(1.15);
+    opacity: 0.5;
+  }
+}
+@media (min-width: 1024px) {
+  .home-routing {
+    height: 430px;
+  }
+  .home-routing-lines {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .home-request {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 32%;
+    transform: translateY(-50%);
+  }
+  .home-routing-label {
+    position: absolute;
+    top: 61%;
+    left: 35%;
+    width: 27%;
+    margin: 0;
+  }
+  .home-providers {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 34%;
+    height: 100%;
+    align-content: space-between;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-route-flow,
+  .home-route-halo {
+    animation: none;
+  }
+  .home-provider,
+  .home-provider:hover {
+    transition: none;
+    transform: none;
+  }
+}

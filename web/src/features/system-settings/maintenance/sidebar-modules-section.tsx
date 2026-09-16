@@ -124,6 +124,10 @@ export function SidebarModulesSection({
       },
     },
     personal: {
+      tickets: {
+        title: t('Support tickets'),
+        description: t('Create a ticket when you need help.'),
+      },
       topup: {
         title: t('Wallet'),
         description: t('Top up balance and view billing history.'),
@@ -138,6 +142,10 @@ export function SidebarModulesSection({
       },
     },
     admin: {
+      tickets: {
+        title: t('Ticket management'),
+        description: t('Manage support tickets'),
+      },
       channel: {
         title: t('Channels'),
         description: t('Configure upstream providers and routing.'),

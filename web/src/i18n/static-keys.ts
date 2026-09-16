@@ -813,6 +813,10 @@ export const STATIC_I18N_KEYS = [
   'Account unlinking',
   'Email confirmation code resend',
   // Model and vendor management labels.
+  'Unable to process ticket',
+  'Ticket not found',
+  'Invalid ticket input',
+  'Reopen this ticket before replying',
   'Vendors',
   'Vendor management',
   'Vendor name and icon must not exceed 128 characters.',

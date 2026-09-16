@@ -16,14 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useTranslation } from 'react-i18next'
+import { createFileRoute } from '@tanstack/react-router'
 
-export function Stats() {
-  const { t } = useTranslation()
+import { Tickets } from '@/features/tickets'
 
-  return (
-    <p className='text-muted-foreground mt-6 text-sm leading-6'>
-      {t('Serving 10+ enterprises, 30+ API gateways, and 9,000+ users')}
-    </p>
-  )
-}
+export const Route = createFileRoute('/_authenticated/tickets/')({
+  component: Tickets,
+})
