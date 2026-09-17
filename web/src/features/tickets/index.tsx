@@ -32,6 +32,7 @@ import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { toIntlLocale } from '@/i18n/languages'
 
 import { getTickets, type Ticket } from './api'
 import { CreateTicketDialog } from './components/create-ticket-dialog'
@@ -40,6 +41,7 @@ import { ticketOptions } from './options'
 
 export function Tickets(props: { management?: boolean }) {
   const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.language)
   const client = useQueryClient()
   const management = props.management ?? false
   const [creating, setCreating] = useState(false)
@@ -129,9 +131,7 @@ export function Tickets(props: { management?: boolean }) {
           className='whitespace-nowrap'
           dateTime={new Date(row.original.updated_at * 1000).toISOString()}
         >
-          {new Date(row.original.updated_at * 1000).toLocaleString(
-            i18n.language
-          )}
+          {new Date(row.original.updated_at * 1000).toLocaleString(locale)}
         </time>
       ),
     },

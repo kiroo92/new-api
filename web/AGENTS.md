@@ -62,6 +62,7 @@
   - **非 React 环境**（工具函数、常量、类方法）：可使用 `import { t } from 'i18next'`；此类用法不会随语言切换自动更新，仅在不依赖响应式更新的场景使用。
   - 即使父组件已使用 `useTranslation()`，子组件仍应自行使用，以保证独立性。
 - **专有名词**：品牌、产品、技术术语等可保留英文（如 API、React、TypeScript）；若有约定俗成的译法则使用翻译。
+- **日期与数字语言码**：i18next 运行时中文代码是 `zhCN` / `zhTW`；传给 `Intl.*` 或 `Date.toLocale*` 前必须用 `@/i18n/languages` 的 `toIntlLocale()` 转换为 `zh-CN` / `zh-TW`，否则会抛出 `RangeError`。默认测试语言是 `en`，涉及本地化格式的回归应覆盖简体和繁体中文、有数据的列表与详情。
 - **翻译键**：使用有层级、语义清晰的键名，如 `dashboard.overview.title`，并保持命名一致。
 
 - **枚举与文案（常量中的 i18n）**

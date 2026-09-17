@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -25,12 +26,13 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18next from 'i18next'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 
 import { Tickets } from '..'
-import type { Ticket } from '../api'
+import type { Ticket, TicketMessage } from '../api'
 
 const ticket: Ticket = {
   id: 7,
@@ -45,7 +47,11 @@ const ticket: Ticket = {
   updated_at: 1700000000,
 }
 
-function renderTickets(management = false, items: Ticket[] = []) {
+function renderTickets(
+  management = false,
+  items: Ticket[] = [],
+  messages: TicketMessage[] = []
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -56,7 +62,12 @@ function renderTickets(management = false, items: Ticket[] = []) {
     const data = String(url).endsWith('/7')
       ? {
           ticket: { ...ticket },
-          messages: { items: [], total: 0, page: 1, page_size: 50 },
+          messages: {
+            items: messages,
+            total: messages.length,
+            page: 1,
+            page_size: 50,
+          },
         }
       : { items: visible, total: visible.length, page: 1, page_size: 20 }
     return { data: { success: true, data } }
@@ -69,11 +80,58 @@ function renderTickets(management = false, items: Ticket[] = []) {
   return { get, client, user: userEvent.setup() }
 }
 
-afterEach(() => {
+afterEach(async () => {
+  cleanup()
   vi.restoreAllMocks()
   ticket.status = 'open'
   localStorage.clear()
+  await i18next.changeLanguage('en')
 })
+
+it.each([
+  { language: 'zhCN', locale: 'zh-CN', management: true },
+  { language: 'zhTW', locale: 'zh-TW', management: true },
+  { language: 'zhCN', locale: 'zh-CN', management: false },
+  { language: 'zhTW', locale: 'zh-TW', management: false },
+])(
+  'renders ticket list, detail and reply dates in $language (management=$management)',
+  async ({ language, locale, management }) => {
+    await i18next.changeLanguage(language)
+    const message: TicketMessage = {
+      id: 11,
+      username: 'support',
+      is_staff: true,
+      content: 'We have received your ticket.',
+      created_at: ticket.created_at + 3600,
+    }
+    const { user } = renderTickets(management, [ticket], [message])
+    const subject = await screen.findByRole('button', { name: ticket.subject })
+    expect(
+      screen.getByText(
+        new Date(ticket.updated_at * 1000).toLocaleString(locale),
+        { collapseWhitespace: false }
+      )
+    ).toBeVisible()
+
+    await user.click(subject)
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(ticket.content ?? '')).toBeVisible()
+    expect(
+      within(dialog).getByText(
+        new Date(ticket.created_at * 1000).toLocaleString(locale),
+        { collapseWhitespace: false }
+      )
+    ).toBeVisible()
+    const replies = within(dialog).getByRole('list', { name: 'Replies' })
+    expect(within(replies).getByText(message.content)).toBeVisible()
+    expect(
+      within(replies).getByText(
+        new Date(message.created_at * 1000).toLocaleString(locale),
+        { collapseWhitespace: false }
+      )
+    ).toBeVisible()
+  }
+)
 
 it('opens the create dialog from the empty state and blocks empty or duplicate submissions', async () => {
   let finish!: (value: { data: { success: boolean; data: Ticket } }) => void

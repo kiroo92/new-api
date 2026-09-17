@@ -37,6 +37,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Textarea } from '@/components/ui/textarea'
+import { toIntlLocale } from '@/i18n/languages'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { getTicket, replyTicket, setTicketStatus, type Ticket } from '../api'
@@ -48,6 +49,7 @@ export function TicketDetailDialog(props: {
   onClose: () => void
 }) {
   const { t, i18n } = useTranslation()
+  const locale = toIntlLocale(i18n.language)
   const client = useQueryClient()
   const [page, setPage] = useState(1)
   const detail = useQuery({
@@ -145,9 +147,7 @@ export function TicketDetailDialog(props: {
             <div className='text-muted-foreground mb-2 flex flex-wrap justify-between gap-2 text-xs'>
               <span>{ticket.username}</span>
               <time dateTime={new Date(ticket.created_at * 1000).toISOString()}>
-                {new Date(ticket.created_at * 1000).toLocaleString(
-                  i18n.language
-                )}
+                {new Date(ticket.created_at * 1000).toLocaleString(locale)}
               </time>
             </div>
             <p className='text-sm leading-6 break-words whitespace-pre-wrap'>
@@ -166,9 +166,7 @@ export function TicketDetailDialog(props: {
                     className='ms-auto'
                     dateTime={new Date(message.created_at * 1000).toISOString()}
                   >
-                    {new Date(message.created_at * 1000).toLocaleString(
-                      i18n.language
-                    )}
+                    {new Date(message.created_at * 1000).toLocaleString(locale)}
                   </time>
                 </div>
                 <p className='text-sm leading-6 break-words whitespace-pre-wrap'>
