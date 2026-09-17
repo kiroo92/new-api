@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { Row, PaginationState } from '@tanstack/react-table'
+import type { ColumnDef, Row, PaginationState } from '@tanstack/react-table'
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -33,6 +33,7 @@ import { usePricingColumns } from './pricing-columns'
 
 export interface PricingTableProps {
   models: PricingModel[]
+  columns?: ColumnDef<PricingModel>[]
   isLoading?: boolean
   priceRate?: number
   usdExchangeRate?: number
@@ -60,13 +61,14 @@ export function PricingTable(props: PricingTableProps) {
     pageSize: DEFAULT_PRICING_PAGE_SIZE,
   })
 
-  const columns = usePricingColumns({
+  const defaultColumns = usePricingColumns({
     tokenUnit,
     priceRate,
     usdExchangeRate,
     showRechargePrice,
     selectedGroup,
   })
+  const columns = props.columns ?? defaultColumns
 
   const { table } = useDataTable({
     data: models,
@@ -103,6 +105,7 @@ export function PricingTable(props: PricingTableProps) {
           <DataTableRow
             key={row.id}
             row={row}
+            cellRenderColumns={columns}
             className='hover:bg-muted/30 cursor-pointer transition-colors'
             onClick={() => handleRowClick(row.original)}
           />

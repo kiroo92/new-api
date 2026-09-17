@@ -197,6 +197,8 @@
 
 ### 3.16 构建与部署
 
+- **公开定价**：`/pricing` 默认为定价总览，`?section=models` 为原模型广场；旧的带筛选参数链接仍进入模型广场。总览只展示访客 `default` / 当前账户分组的费率，不取其他分组最低价。`features/pricing/lib/overview-prices.ts` 的官方参考价仅用于展示，维护时核实来源和日期，不影响实际计费；未知型号不推断官方价，条件计费不宣称固定节省比例。两种视图共用价格接口、详情和表格组件。
+
 - 使用 Rsbuild，配置见 `rsbuild.config.ts`；脚本以 `package.json` 为准（如 `bun run dev`、`bun run build`、`bun run typecheck`、`bun run lint`、`bun run format`），包管理见 [3.15 依赖管理](#315-依赖管理)。
 - 代码分割与懒加载策略见 [3.4 性能](#34-性能)；资源使用合适格式与压缩，环境变量用 `.env` 且以 `VITE_` 前缀，不在代码中硬编码。
 - **发布前**：执行 typecheck、lint、format 检查，完成生产构建并检查产物体积与环境变量配置。

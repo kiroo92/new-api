@@ -24,6 +24,7 @@ import { getModuleAccessForGuard } from '@/lib/nav-modules'
 import { useAuthStore } from '@/stores/auth-store'
 
 const modelDetailsSearchSchema = z.object({
+  section: z.enum(['overview', 'models']).optional().catch(undefined),
   search: z.string().optional(),
   sort: z.string().optional(),
   vendor: z.string().optional(),
