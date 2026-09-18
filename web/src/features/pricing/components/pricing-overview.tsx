@@ -43,55 +43,70 @@ export function PricingOverview(props: {
   models: PricingModel[]
   vendors: PricingVendor[]
   groupRatio: Record<string, number>
+  routingGroups?: string[]
   onModelClick: (name: string) => void
   onBrowse: () => void
 }) {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
   const currency = useSystemConfigStore((state) => state.config.currency)
-  const group = user?.group || 'default'
+  const accountGroup = user?.group || 'default'
+  const groups = useMemo(
+    () => props.routingGroups ?? [accountGroup],
+    [props.routingGroups, accountGroup]
+  )
   const currencyLabel =
     currency.quotaDisplayType === 'TOKENS' ? 'USD' : getCurrencyLabel()
   const [search, setSearch] = useState('')
   const [vendor, setVendor] = useState('all')
   const models = useMemo(() => {
-    const ratio = props.groupRatio[group]
-    if (typeof ratio !== 'number' || !Number.isFinite(ratio) || ratio < 0) {
-      return []
-    }
     return props.models
       .filter(
         (model) =>
-          (model.enable_groups.includes(group) ||
-            model.enable_groups.includes('all')) &&
           (vendor === 'all' || String(model.vendor_id) === vendor) &&
           `${model.model_name} ${model.vendor_name ?? ''}`
             .toLowerCase()
             .includes(search.trim().toLowerCase())
       )
-      .map((model) => ({
-        ...model,
-        enable_groups: [group],
-        group_ratio: props.groupRatio,
-      }))
+      .flatMap((model) => {
+        const group = groups.find((candidate) => {
+          const ratio = props.groupRatio[candidate]
+          return (
+            (model.enable_groups.includes(candidate) ||
+              model.enable_groups.includes('all')) &&
+            typeof ratio === 'number' &&
+            Number.isFinite(ratio) &&
+            ratio >= 0
+          )
+        })
+        return group
+          ? [
+              {
+                ...model,
+                enable_groups: [group],
+                group_ratio: props.groupRatio,
+              },
+            ]
+          : []
+      })
       .sort(
         (a, b) =>
           Number(!a.model_name.toLowerCase().startsWith('claude-')) -
             Number(!b.model_name.toLowerCase().startsWith('claude-')) ||
           a.model_name.localeCompare(b.model_name)
       )
-  }, [props.models, props.groupRatio, group, vendor, search])
+  }, [props.models, props.groupRatio, groups, vendor, search])
   const quotes = useMemo(
     () =>
       new Map(
         models.map((model) => [
           model.model_name,
-          getOverviewQuote(model, group),
+          getOverviewQuote(model, model.enable_groups[0]),
         ])
       ),
     // Formatters read the currency store.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [models, group, currency]
+    [models, currency]
   )
   const tokenModels = models.filter((model) => quotes.get(model.model_name))
   const otherModels = models.filter((model) => !quotes.get(model.model_name))
@@ -112,6 +127,9 @@ export function PricingOverview(props: {
           {quotes.get(row.original.model_name)?.conditional
             ? t('Rates vary by usage conditions')
             : row.original.vendor_name}
+        </p>
+        <p data-table-text='secondary' className='text-muted-foreground mt-1'>
+          {t('Group')}: {row.original.enable_groups[0]}
         </p>
       </div>
     ),
@@ -196,9 +214,7 @@ export function PricingOverview(props: {
           </div>
         </div>
         <p className='text-muted-foreground text-xs'>
-          {user
-            ? t('Prices for your account group: {{group}}', { group })
-            : t('New account prices · {{group}} group', { group })}
+          {t('Group')}: {groups.join(', ') || '—'}
         </p>
         {models.length === 0 && (
           <EmptyState
@@ -208,7 +224,7 @@ export function PricingOverview(props: {
         )}
         {tokenModels.length > 0 && (
           <PricingTable
-            key={group + vendor + search}
+            key={groups.join(',') + vendor + search}
             models={tokenModels}
             columns={columns}
             onModelClick={props.onModelClick}
@@ -220,7 +236,7 @@ export function PricingOverview(props: {
               {t('Other billing units')}
             </h3>
             <PricingTable
-              key={group + vendor + search}
+              key={groups.join(',') + vendor + search}
               models={otherModels}
               onModelClick={props.onModelClick}
               columns={[
@@ -232,7 +248,10 @@ export function PricingOverview(props: {
                   cell: ({ row }) => (
                     <ModelPriceCell
                       model={row.original}
-                      options={{ selectedGroup: group, tokenUnit: 'M' }}
+                      options={{
+                        selectedGroup: row.original.enable_groups[0],
+                        tokenUnit: 'M',
+                      }}
                       showExpression={false}
                     />
                   ),

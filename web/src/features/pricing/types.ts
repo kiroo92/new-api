@@ -130,6 +130,7 @@ export type PricingData = {
   usable_group: Record<string, { desc: string; ratio: number }>
   supported_endpoint: Record<string, string>
   auto_groups: string[]
+  routing_groups?: string[]
 }
 
 export type TokenUnit = 'M' | 'K'

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -33,11 +34,37 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 			}
 		}
 		// 如果userGroup不在UserUsableGroups中，返回UserUsableGroups + userGroup
-		if _, ok := groupsCopy[userGroup]; !ok {
+		if _, ok := groupsCopy[userGroup]; !ok && ratio_setting.ContainsGroupRatio(userGroup) {
 			groupsCopy[userGroup] = "用户分组"
 		}
 	}
+	for group := range groupsCopy {
+		if group != "auto" && !ratio_setting.ContainsGroupRatio(group) {
+			delete(groupsCopy, group)
+		}
+	}
 	return groupsCopy
+}
+
+// GetUserRoutingGroups covers every permitted concrete group for the default
+// API key, keeping the account group first, then configured Auto order.
+func GetUserRoutingGroups(userGroup string) []string {
+	usable := GetUserUsableGroups(userGroup)
+	delete(usable, "auto")
+	delete(usable, "")
+	groups := make([]string, 0, len(usable))
+	for _, group := range append([]string{userGroup}, setting.GetAutoGroups()...) {
+		if _, ok := usable[group]; ok {
+			groups = append(groups, group)
+			delete(usable, group)
+		}
+	}
+	remaining := make([]string, 0, len(usable))
+	for group := range usable {
+		remaining = append(remaining, group)
+	}
+	slices.Sort(remaining)
+	return append(groups, remaining...)
 }
 
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
@@ -92,9 +119,13 @@ func FilterUserTokenAutoGroups(userGroup string, groups []string) []string {
 }
 
 // GetRequestAutoGroups resolves the ordered Auto groups for the current token.
+// Default API keys use all currently permitted groups without a per-token cap.
 // The absence of the context value means that the token inherits the complete
 // global Auto list; a present (even empty) value is an explicit token snapshot.
 func GetRequestAutoGroups(c *gin.Context, userGroup string) []string {
+	if common.GetContextKeyBool(c, constant.ContextKeyTokenIsDefault) {
+		return GetUserRoutingGroups(userGroup)
+	}
 	value, ok := common.GetContextKey(c, constant.ContextKeyTokenAutoGroups)
 	if !ok {
 		return GetUserAutoGroup(userGroup)

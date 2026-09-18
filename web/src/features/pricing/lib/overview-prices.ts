@@ -60,7 +60,7 @@ export type OverviewQuote = {
   savings?: number
 }
 
-/** Only show prices for the account/default group; never choose a cheaper group. */
+/** Quote the resolved routing group; never choose a cheaper group. */
 export function getOverviewQuote(
   model: PricingModel,
   group: string

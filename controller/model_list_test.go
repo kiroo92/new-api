@@ -10,8 +10,10 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -32,6 +34,108 @@ type listModelsResponse struct {
 type userModelsResponse struct {
 	Success bool     `json:"success"`
 	Data    []string `json:"data"`
+}
+
+func TestDefaultAPIKeyRoutesAllPermittedGroupsWithoutDefault(t *testing.T) {
+	originalAuto := setting.AutoGroups2JsonString()
+	originalUsable := setting.UserUsableGroups2JSONString()
+	originalRatios := ratio_setting.GroupRatio2JSONString()
+	specialGroups := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup
+	originalSpecial := specialGroups.ReadAll()
+	originalMax := setting.GetMaxTokenAutoGroups()
+	originalCache := common.MemoryCacheEnabled
+	originalDB, originalLogDB := model.DB, model.LOG_DB
+	originalRedis := common.RedisEnabled
+	originalMainType, originalLogType := common.MainDatabaseType(), common.LogDatabaseType()
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateAutoGroupsByJsonString(originalAuto))
+		require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(originalUsable))
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(originalRatios))
+		require.NoError(t, setting.UpdateMaxTokenAutoGroups(fmt.Sprint(originalMax)))
+		specialGroups.Clear()
+		specialGroups.AddAll(originalSpecial)
+		common.MemoryCacheEnabled, common.RedisEnabled = originalCache, originalRedis
+		model.DB, model.LOG_DB = originalDB, originalLogDB
+		common.SetDatabaseTypes(originalMainType, originalLogType)
+		model.InvalidatePricingCache()
+	})
+	db := setupModelListControllerTestDB(t)
+	common.MemoryCacheEnabled = false
+	specialGroups.Clear()
+	withSelfUseModeEnabled(t)
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["default"]`))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"default":"old","chatgpt":"ChatGPT","claude":"Claude"}`))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"chatgpt":2,"claude":3,"private":1}`))
+	require.NoError(t, setting.UpdateMaxTokenAutoGroups("1"))
+	require.NoError(t, db.Create(&model.User{Id: 1201, Username: "routing-user", Group: "default", Status: common.UserStatusEnabled}).Error)
+	for i, group := range []string{"chatgpt", "claude", "private"} {
+		require.NoError(t, db.Create(&model.Channel{Id: i + 1, Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled,
+			Name: group, Key: "test-key", Models: group + "-model", Group: group, Priority: common.GetPointer(int64(0))}).Error)
+		require.NoError(t, db.Create(&model.Ability{Group: group, Model: group + "-model", ChannelId: i + 1, Enabled: true, Priority: common.GetPointer(int64(0))}).Error)
+	}
+	model.InvalidatePricingCache()
+	token := &model.Token{Id: 1, UserId: 1201, IsDefault: true, UnlimitedQuota: true}
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	require.NoError(t, middleware.SetupContextForToken(ctx, token))
+	assert.Equal(t, "auto", common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup))
+	assert.Equal(t, []string{"chatgpt", "claude"}, service.GetRequestAutoGroups(ctx, "default"))
+	ListModels(ctx, constant.ChannelTypeOpenAI)
+	assert.Len(t, decodeListModelsPayload(t, recorder).Data, 2)
+	assert.Equal(t, map[string]struct{}{"chatgpt-model": {}, "claude-model": {}}, decodeListModelsResponse(t, recorder))
+
+	for _, group := range []string{"chatgpt", "claude", "private"} {
+		request, _ := gin.CreateTestContext(httptest.NewRecorder())
+		common.SetContextKey(request, constant.ContextKeyUserGroup, "default")
+		require.NoError(t, middleware.SetupContextForToken(request, token))
+		channel, selected, err := service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
+			Ctx: request, TokenGroup: common.GetContextKeyString(request, constant.ContextKeyUsingGroup), ModelName: group + "-model",
+		})
+		require.NoError(t, err)
+		if group == "private" {
+			assert.Nil(t, channel)
+			continue
+		}
+		require.NotNil(t, channel)
+		assert.Equal(t, group, selected)
+		assert.Equal(t, group, common.GetContextKeyString(request, constant.ContextKeyAutoGroup))
+	}
+
+	for _, userID := range []int{0, 1201} {
+		pricingRecorder := httptest.NewRecorder()
+		pricingContext, _ := gin.CreateTestContext(pricingRecorder)
+		if userID > 0 {
+			pricingContext.Set("id", userID)
+		}
+		GetPricing(pricingContext)
+		var result struct {
+			Data   []model.Pricing    `json:"data"`
+			Usable map[string]string  `json:"usable_group"`
+			Groups []string           `json:"routing_groups"`
+			Ratios map[string]float64 `json:"group_ratio"`
+		}
+		require.NoError(t, common.Unmarshal(pricingRecorder.Body.Bytes(), &result))
+		assert.Equal(t, []string{"chatgpt", "claude"}, result.Groups)
+		assert.Equal(t, map[string]float64{"chatgpt": 2, "claude": 3}, result.Ratios)
+		assert.NotContains(t, result.Usable, "default")
+		assert.Contains(t, pricingByModelName(result.Data), "chatgpt-model")
+		assert.Contains(t, pricingByModelName(result.Data), "claude-model")
+		assert.NotContains(t, pricingByModelName(result.Data), "private-model")
+	}
+
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`["claude","chatgpt"]`))
+	assert.Equal(t, []string{"claude", "chatgpt"}, service.GetRequestAutoGroups(ctx, "default"))
+	specialGroups.Set("default", map[string]string{"-:claude": ""})
+	assert.Equal(t, []string{"chatgpt"}, service.GetRequestAutoGroups(ctx, "default"))
+	specialGroups.Clear()
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"chatgpt":"ChatGPT"}`))
+	assert.Equal(t, []string{"chatgpt"}, service.GetRequestAutoGroups(ctx, "default"))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{}`))
+	assert.Empty(t, service.GetRequestAutoGroups(ctx, "default"))
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"chatgpt":2,"claude":3}`))
+	require.NoError(t, setting.UpdateUserUsableGroupsByJSONString(`{"chatgpt":"ChatGPT","claude":"Claude"}`))
+	assert.Equal(t, []string{"default", "claude", "chatgpt"}, service.GetRequestAutoGroups(ctx, "default"))
 }
 
 func setupModelListControllerTestDB(t *testing.T) *gorm.DB {

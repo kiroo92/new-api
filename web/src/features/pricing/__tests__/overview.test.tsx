@@ -223,9 +223,7 @@ it('defaults to overview, filters by vendor, opens details and switches back fro
     name: 'Transparent pricing. Pay as you go.',
   })
   let panel = screen.getByRole('tabpanel', { name: 'Pricing overview' })
-  expect(
-    within(panel).getByText('New account prices · default group')
-  ).toBeVisible()
+  expect(within(panel).getAllByText('Group: default')[0]).toBeVisible()
   expect(within(panel).queryByText('premium-only')).not.toBeInTheDocument()
   const modelButton = await within(panel).findByRole('button', {
     name: model.model_name,
@@ -295,6 +293,57 @@ it('keeps old filtered links in the model square and shows API failures with a r
   expect(await screen.findByText('No Models Found')).toBeVisible()
 })
 
+it('shows models and their routing-group prices after default is deleted', async () => {
+  const { client } = await renderPricing()
+  await screen.findByRole('button', { name: model.model_name })
+  await act(async () => {
+    client.setQueryData(['pricing'], {
+      success: true,
+      data: [
+        { ...model, enable_groups: ['claude'] },
+        {
+          ...model,
+          id: 2,
+          model_name: 'gpt-example',
+          enable_groups: ['chatgpt'],
+        },
+        {
+          ...model,
+          id: 3,
+          model_name: 'shared-model',
+          enable_groups: ['chatgpt', 'claude'],
+        },
+        {
+          ...model,
+          id: 4,
+          model_name: 'hidden-model',
+          enable_groups: ['private'],
+        },
+      ],
+      vendors: [{ id: 1, name: 'Anthropic' }],
+      group_ratio: { chatgpt: 2, claude: 3 },
+      usable_group: { chatgpt: 'ChatGPT', claude: 'Claude' },
+      routing_groups: ['claude', 'chatgpt'],
+      auto_groups: [],
+      supported_endpoint: {},
+    })
+  })
+  const panel = screen.getByRole('tabpanel', { name: 'Pricing overview' })
+  for (const [name, price, group] of [
+    [model.model_name, '$4.5', 'claude'],
+    ['gpt-example', '$3', 'chatgpt'],
+    ['shared-model', '$4.5', 'claude'],
+  ]) {
+    const button = await within(panel).findByRole('button', { name })
+    const row = button.closest('tr')
+    if (!row) throw new Error('Expected a model pricing row')
+    expect(within(row).getByText(price, { exact: true })).toBeVisible()
+    expect(within(row).getByText(`Group: ${group}`)).toBeVisible()
+  }
+  expect(within(panel).queryByText('hidden-model')).not.toBeInTheDocument()
+  expect(within(panel).queryByText(/default group/)).not.toBeInTheDocument()
+})
+
 it('refreshes account-scoped prices when signing in and never reuses the anonymous group quote', async () => {
   const { user, get } = await renderPricing()
   await screen.findByRole('heading', {
@@ -308,9 +357,7 @@ it('refreshes account-scoped prices when signing in and never reuses the anonymo
   const panel = await screen.findByRole('tabpanel', {
     name: 'Pricing overview',
   })
-  expect(
-    await within(panel).findByText('Prices for your account group: premium')
-  ).toBeVisible()
+  expect((await within(panel).findAllByText('Group: premium'))[0]).toBeVisible()
   expect(within(panel).getAllByText('$4.5').length).toBeGreaterThan(0)
   expect(get.mock.calls.filter(([url]) => url === '/api/pricing')).toHaveLength(
     2

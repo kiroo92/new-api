@@ -64,6 +64,7 @@ export function Pricing() {
     usableGroup,
     endpointMap,
     autoGroups,
+    routingGroups,
     isLoading,
     error,
     refetch,
@@ -221,6 +222,7 @@ export function Pricing() {
                     models={models}
                     vendors={vendors}
                     groupRatio={groupRatio}
+                    routingGroups={routingGroups}
                     onModelClick={handleModelClick}
                     onBrowse={() => changeSection('models')}
                   />
