@@ -60,6 +60,12 @@ export type OverviewQuote = {
   savings?: number
 }
 
+function savingsFromGroupRatio(ratio: number): number | undefined {
+  if (ratio < 0 || ratio >= 1) return undefined
+  const savings = Math.floor((1 - ratio) * 100)
+  return savings > 0 ? savings : undefined
+}
+
 /** Quote the resolved routing group; never choose a cheaper group. */
 export function getOverviewQuote(
   model: PricingModel,
@@ -87,6 +93,9 @@ export function getOverviewQuote(
     write: '—',
     conditional: false,
   }
+  // Group ratios are billing multipliers, so a sub-1 multiplier is a real
+  // discount even when no external provider reference is available.
+  quote.savings = savingsFromGroupRatio(ratio)
   if (isDynamicPricingModel(model)) {
     const tiers = getDynamicPricingTiers(model)
     if (!tiers.length) return null

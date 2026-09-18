@@ -159,13 +159,13 @@ export function PricingOverview(props: {
       size: 170,
       cell: ({ row }) => {
         const quote = quotes.get(row.original.model_name)
-        if (!quote?.official) {
+        if (!quote) {
           return <span className='text-muted-foreground'>—</span>
         }
         return (
           <div className='space-y-1 py-2'>
             <span className='text-muted-foreground whitespace-nowrap'>
-              {quote.official}
+              {quote.official ?? '—'}
             </span>
             {quote.savings !== undefined && (
               <p data-table-text='secondary' className='text-brand'>

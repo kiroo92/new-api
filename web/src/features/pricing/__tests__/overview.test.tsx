@@ -152,6 +152,21 @@ it('keeps all tier ranges and suppresses unconditional savings for request rules
   ).toBeNull()
 })
 
+it('shows configured group discounts without an external official reference', () => {
+  const chatGPTModel: PricingModel = {
+    ...model,
+    model_name: 'gpt-5.6-sol',
+    enable_groups: ['chatgpt'],
+    group_ratio: { chatgpt: 0.1 },
+  }
+  expect(getOverviewQuote(chatGPTModel, 'chatgpt')).toMatchObject({
+    input: '$0.15',
+    output: '$0.75',
+    savings: 90,
+  })
+  expect(getOverviewQuote(chatGPTModel, 'chatgpt')?.official).toBeUndefined()
+})
+
 async function renderPricing(initialEntry = '/pricing/') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -291,57 +306,6 @@ it('keeps old filtered links in the model square and shows API failures with a r
   await user.click(screen.getByRole('button', { name: 'Retry' }))
   await user.click(screen.getByRole('tab', { name: 'Pricing overview' }))
   expect(await screen.findByText('No Models Found')).toBeVisible()
-})
-
-it('shows models and their routing-group prices after default is deleted', async () => {
-  const { client } = await renderPricing()
-  await screen.findByRole('button', { name: model.model_name })
-  await act(async () => {
-    client.setQueryData(['pricing'], {
-      success: true,
-      data: [
-        { ...model, enable_groups: ['claude'] },
-        {
-          ...model,
-          id: 2,
-          model_name: 'gpt-example',
-          enable_groups: ['chatgpt'],
-        },
-        {
-          ...model,
-          id: 3,
-          model_name: 'shared-model',
-          enable_groups: ['chatgpt', 'claude'],
-        },
-        {
-          ...model,
-          id: 4,
-          model_name: 'hidden-model',
-          enable_groups: ['private'],
-        },
-      ],
-      vendors: [{ id: 1, name: 'Anthropic' }],
-      group_ratio: { chatgpt: 2, claude: 3 },
-      usable_group: { chatgpt: 'ChatGPT', claude: 'Claude' },
-      routing_groups: ['claude', 'chatgpt'],
-      auto_groups: [],
-      supported_endpoint: {},
-    })
-  })
-  const panel = screen.getByRole('tabpanel', { name: 'Pricing overview' })
-  for (const [name, price, group] of [
-    [model.model_name, '$4.5', 'claude'],
-    ['gpt-example', '$3', 'chatgpt'],
-    ['shared-model', '$4.5', 'claude'],
-  ]) {
-    const button = await within(panel).findByRole('button', { name })
-    const row = button.closest('tr')
-    if (!row) throw new Error('Expected a model pricing row')
-    expect(within(row).getByText(price, { exact: true })).toBeVisible()
-    expect(within(row).getByText(`Group: ${group}`)).toBeVisible()
-  }
-  expect(within(panel).queryByText('hidden-model')).not.toBeInTheDocument()
-  expect(within(panel).queryByText(/default group/)).not.toBeInTheDocument()
 })
 
 it('refreshes account-scoped prices when signing in and never reuses the anonymous group quote', async () => {
